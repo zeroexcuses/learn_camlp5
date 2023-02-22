@@ -21,6 +21,35 @@ end
 |code};;
 
 
+let rec typekind_to_rs ~name pps = 
+  let open MLast in
+  function
+    <:ctyp< int >> ->  Fmt.(pf pps "i32")
+  | <:ctyp< string >> ->  Fmt.(pf pps "String")
+  | <:ctyp< t >> ->  Fmt.(pf pps "%s" name)
+  | <:ctyp< $lid:s$ >> ->  Fmt.(pf pps "%s" s)
+  | <:ctyp< { $list:l$ } >> ->
+     let members = l |> List.map (function (_,  mname, _,  ty, _) -> (mname, ty)) in
+     Fmt.(pf pps "{ %a }"
+            (list ~sep:(const string ", ") (pair ~sep:(const string ": ") string (typekind_to_rs ~name)))
+            members)
+  | <:ctyp< [ $list:l$ ] >> ->
+     let members = l |> List.map (function
+                         <:constructor< $uid:cname$ of $list:l$ >> -> (cname, l)) in
+     let pp_branch pps (cname,l) =
+       Fmt.(pf pps "%s(%a)" cname (list ~sep:(const string ", ") (typekind_to_rs ~name)) l) in
+     Fmt.(pf pps "{ %a }" (list ~sep:(const string ", ") pp_branch) members)
+
+let typedecl_to_rs ~name pps = 
+  let open MLast in
+  function
+    <:type_decl< t = $tk$ >> ->
+     match tk with
+       <:ctyp< { $list:_$ } >> ->
+      Fmt.(pf pps "struct %s %a" name (typekind_to_rs ~name) tk)
+     | <:ctyp< [ $list:_$ ] >> ->
+      Fmt.(pf pps "enum %s %a" name (typekind_to_rs ~name) tk)
+;;
 
 
 let parse_implem s = Grammar.Entry.parse implem (Stream.of_string s) ;;
@@ -49,35 +78,9 @@ s |> print_string;;
 *)
 
 
+
+
 (*
-let rec typekind_to_rs ~name pps = function
-    <:ctyp< int >> ->  Fmt.(pf pps "i32")
-  | <:ctyp< string >> ->  Fmt.(pf pps "String")
-  | <:ctyp< t >> ->  Fmt.(pf pps "%s" name)
-  | <:ctyp< $lid:s$ >> ->  Fmt.(pf pps "%s" s)
-  | <:ctyp< { $list:l$ } >> ->
-     let members = l |> List.map (function (_,  mname, _,  ty, _) -> (mname, ty)) in
-     Fmt.(pf pps "{ %a }"
-            (list ~sep:(const string ", ") (pair ~sep:(const string ": ") string (typekind_to_rs ~name)))
-            members)
-  | <:ctyp< [ $list:l$ ] >> ->
-     let members = l |> List.map (function
-                         <:constructor< $uid:cname$ of $list:l$ >> -> (cname, l)) in
-     let pp_branch pps (cname,l) =
-       Fmt.(pf pps "%s(%a)" cname (list ~sep:(const string ", ") (typekind_to_rs ~name)) l) in
-     Fmt.(pf pps "{ %a }" (list ~sep:(const string ", ") pp_branch) members)
-
-let typedecl_to_rs ~name pps = function
-    <:type_decl< t = $tk$ >> ->
-     match tk with
-       <:ctyp< { $list:_$ } >> ->
-      Fmt.(pf pps "struct %s %a" name (typekind_to_rs ~name) tk)
-     | <:ctyp< [ $list:_$ ] >> ->
-      Fmt.(pf pps "enum %s %a" name (typekind_to_rs ~name) tk)
-
-;;
-
-
 
 
 let loc = Ploc.dummy ;;
