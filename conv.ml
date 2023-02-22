@@ -25,10 +25,21 @@ end
 
 let parse_implem s = Grammar.Entry.parse implem (Stream.of_string s) ;;
 
-let _t: ((MLast.str_item * MLast.loc) list * status) = parse_implem code;
+let t: ((MLast.str_item * MLast.loc) list * status) = parse_implem code;;
+
+let str_item_to_rs pps = MLast.(function
+    <:str_item:< module $uid:mname$ = struct
+                type t = $tk$ ;
+                end >> ->
+      Fmt.(pf pps "%a" (typedecl_to_rs ~name:mname) <:type_decl< t = $tk$ >>))
+;;
 
 
+let implem_to_rs pps sil = 
+  let sil = List.map fst sil in
+  Fmt.(pf pps "%a" (list ~sep:(const string "\n") str_item_to_rs) sil) ;;
 
+let _ = implem_to_rs Fmt.stdout (fst t);; 
 
 
 
@@ -66,17 +77,7 @@ let typedecl_to_rs ~name pps = function
 
 ;;
 
-let str_item_to_rs pps = function
-    <:str_item:< module $uid:mname$ = struct
-                type t = $tk$ ;
-                end >> ->
-      Fmt.(pf pps "%a" (typedecl_to_rs ~name:mname) <:type_decl< t = $tk$ >>)
-;;
 
-let implem_to_rs pps sil =
-    let sil = List.map fst sil in
-    Fmt.(pf pps "%a" (list ~sep:(const string "\n") str_item_to_rs) sil)
-;;
 
 
 let loc = Ploc.dummy ;;
