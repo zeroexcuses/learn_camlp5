@@ -1,8 +1,7 @@
 
 
 
-let g = Grammar.gcreate (Plexer.gmake ());;
-let e = Grammar.Entry.create g "expression";;
+open Pcaml
 
 let code = {code|
 module MyRecord = struct
@@ -24,9 +23,9 @@ end
 
 
 
-let parse_expr s = Grammar.Entry.parse_all e (Stream.of_string s) ;;
+let parse_implem s = Grammar.Entry.parse implem (Stream.of_string s) ;;
 
-let _t: MLast.expr list = parse_expr code;
+let _t: ((MLast.str_item * MLast.loc) list * status) = parse_implem code;
 
 
 
