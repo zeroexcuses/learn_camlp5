@@ -5,10 +5,12 @@ open Pcaml
 
 let code = {code|
 module MyRecord = struct
+  [@header "#[deriving(Eq, Show)]"]
   type t = {
-    a: int;
+    a: int [@alt_name "u8"];
     b: string;
-    c: int
+    c: int [@alt_name "u16"];
+    d: int;
   }
 end
 
@@ -19,6 +21,21 @@ module MyVariant = struct
 end
 
 |code};;
+
+
+  (*
+  Target Output:
+
+
+
+#[deriving(Eq, Show)]
+struct MyRecord { a: u8, b: String, c: u16, d: i32 }
+
+enum MyVariant { Ok(String, i32), Err(i32, i32) }
+
+  *)
+
+
 
 
 let rec typekind_to_rs ~name pps = 
@@ -34,21 +51,27 @@ let rec typekind_to_rs ~name pps =
             (list ~sep:(const string ", ") (pair ~sep:(const string ": ") string (typekind_to_rs ~name)))
             members)
   | <:ctyp< [ $list:l$ ] >> ->
-     let members = l |> List.map (function
-                         <:constructor< $uid:cname$ of $list:l$ >> -> (cname, l)) in
+     let members = List.filter_map (function
+                         <:constructor< $uid:cname$ of $list:l$ >> -> Some ((cname, l))
+                         | _ -> None
+                         ) l in
      let pp_branch pps (cname,l) =
        Fmt.(pf pps "%s(%a)" cname (list ~sep:(const string ", ") (typekind_to_rs ~name)) l) in
      Fmt.(pf pps "{ %a }" (list ~sep:(const string ", ") pp_branch) members)
+  | _ -> ()
 
 let typedecl_to_rs ~name pps = 
   let open MLast in
-  function
+  (function
     <:type_decl< t = $tk$ >> ->
-     match tk with
+     (match tk with
        <:ctyp< { $list:_$ } >> ->
       Fmt.(pf pps "struct %s %a" name (typekind_to_rs ~name) tk)
      | <:ctyp< [ $list:_$ ] >> ->
       Fmt.(pf pps "enum %s %a" name (typekind_to_rs ~name) tk)
+     | _ -> ()
+      )
+   | _ -> ())
 ;;
 
 
@@ -60,7 +83,9 @@ let str_item_to_rs pps = MLast.(function
     <:str_item:< module $uid:mname$ = struct
                 type t = $tk$ ;
                 end >> ->
-      Fmt.(pf pps "%a" (typedecl_to_rs ~name:mname) <:type_decl< t = $tk$ >>))
+      Fmt.(pf pps "%a" (typedecl_to_rs ~name:mname) <:type_decl< t = $tk$ >>)
+  | _ -> ()
+      )
 ;;
 
 
