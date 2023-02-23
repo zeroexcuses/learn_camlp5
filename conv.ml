@@ -5,7 +5,7 @@ open Pcaml
 
 let code = {code|
 module MyRecord = struct
-  [@header "#[deriving(Eq, Show)]"]
+  [@@header "#[deriving(Eq, Show)]"]
   type t = {
     a: int [@alt_name "u8"];
     b: string;
