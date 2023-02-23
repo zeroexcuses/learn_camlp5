@@ -5,13 +5,13 @@ open Pcaml
 
 let code = {code|
 module MyRecord = struct
-  [@@header "#[deriving(Eq, Show)]"]
+  
   type t = {
-    a: int [@alt_name "u8"];
+    a: (int [@rust_type "u8"]);
     b: string;
-    c: int [@alt_name "u16"];
+    c: (int [@rust_type "u16"]);
     d: int;
-  }
+  } [@@header "#[deriving(Eq, Show)]"]
 end
 
 module MyVariant = struct
@@ -41,7 +41,8 @@ enum MyVariant { Ok(String, i32), Err(i32, i32) }
 let rec typekind_to_rs ~name pps = 
   let open MLast in
   function
-    <:ctyp< int >> ->  Fmt.(pf pps "i32")
+    <:ctyp< $_$ [@rust_type $str:rty$ ;] >> ->  Fmt.(pf pps "%s" rty)
+  | <:ctyp< int >> ->  Fmt.(pf pps "i32")
   | <:ctyp< string >> ->  Fmt.(pf pps "String")
   | <:ctyp< t >> ->  Fmt.(pf pps "%s" name)
   | <:ctyp< $lid:s$ >> ->  Fmt.(pf pps "%s" s)
@@ -60,15 +61,24 @@ let rec typekind_to_rs ~name pps =
      Fmt.(pf pps "{ %a }" (list ~sep:(const string ", ") pp_branch) members)
   | _ -> ()
 
+let rust_headertxt attrs =
+  attrs
+  |> List.map Pcaml.unvala
+  |> List.filter_map (function
+           <:attribute_body< header $str:payload$ ; >> -> Some payload
+         | _ -> None)
+  |> String.concat "\n"
+
 let typedecl_to_rs ~name pps = 
   let open MLast in
   (function
-    <:type_decl< t = $tk$ >> ->
+    <:type_decl< t = $tk$ $itemattrs:l$ >> ->
+     let headertxt = rust_headertxt l in
      (match tk with
        <:ctyp< { $list:_$ } >> ->
-      Fmt.(pf pps "struct %s %a" name (typekind_to_rs ~name) tk)
+      Fmt.(pf pps "%s\nstruct %s %a" headertxt name (typekind_to_rs ~name) tk)
      | <:ctyp< [ $list:_$ ] >> ->
-      Fmt.(pf pps "enum %s %a" name (typekind_to_rs ~name) tk)
+      Fmt.(pf pps "%s\nenum %s %a" headertxt name (typekind_to_rs ~name) tk)
      | _ -> ()
       )
    | _ -> ())
@@ -77,13 +87,11 @@ let typedecl_to_rs ~name pps =
 
 let parse_implem s = Grammar.Entry.parse implem (Stream.of_string s) ;;
 
-let t: ((MLast.str_item * MLast.loc) list * status) = parse_implem code;;
-
 let str_item_to_rs pps = MLast.(function
     <:str_item:< module $uid:mname$ = struct
-                type t = $tk$ ;
+                type t = $tk$ $itemattrs:l$ ;
                 end >> ->
-      Fmt.(pf pps "%a" (typedecl_to_rs ~name:mname) <:type_decl< t = $tk$ >>)
+      Fmt.(pf pps "%a" (typedecl_to_rs ~name:mname) <:type_decl< t = $tk$ $itemattrs:l$ >>)
   | _ -> ()
       )
 ;;
@@ -93,7 +101,11 @@ let implem_to_rs pps sil =
   let sil = List.map fst sil in
   Fmt.(pf pps "%a" (list ~sep:(const string "\n") str_item_to_rs) sil) ;;
 
-let _ = implem_to_rs Fmt.stdout (fst t);; 
+if not !Sys.interactive then
+let t: ((MLast.str_item * MLast.loc) list * status) = parse_implem code in
+let _ = implem_to_rs Fmt.stdout (fst t) in
+()
+;; 
 
 
 
